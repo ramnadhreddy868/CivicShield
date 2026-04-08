@@ -1,0 +1,41 @@
+const http = require('http');
+
+// Test the API endpoint
+const options = {
+  hostname: 'localhost',
+  port: 5000,
+  path: '/api/auth/register',
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+};
+
+const req = http.request(options, (res) => {
+  let data = '';
+  
+  res.on('data', (chunk) => {
+    data += chunk;
+  });
+  
+  res.on('end', () => {
+    console.log('Status Code:', res.statusCode);
+    console.log('Response:', data);
+    process.exit(0);
+  });
+});
+
+req.on('error', (error) => {
+  console.error('Error:', error.message);
+  process.exit(1);
+});
+
+const payload = JSON.stringify({
+  email: 'test@test.com',
+  password: 'test123',
+  name: 'Test User'
+});
+
+req.write(payload);
+req.end();
+
