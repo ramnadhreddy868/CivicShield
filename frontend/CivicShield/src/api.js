@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = "https://civicshield-35qo.onrender.com/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 // Axios instance with auth token
 const api = axios.create({
@@ -18,7 +18,7 @@ api.interceptors.request.use((config) => {
 
 // ==================== AUTH ENDPOINTS ====================
 
-export async function registerUser(email, password, name, role = 'citizen', phone = '') {
+export async function registerUser({ email, password, name, role = 'citizen', phone = '' }) {
   try {
     const res = await api.post('/auth/register', {
       email,
@@ -79,6 +79,30 @@ export async function verifyOtp(email, otp) {
     return res.data;
   } catch (err) {
     console.error('Verify OTP error:', err);
+    return { error: err.response?.data?.error || err.message };
+  }
+}
+
+export async function forgotPassword(email) {
+  try {
+    const res = await api.post('/auth/forgot-password', { email });
+    return res.data;
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    return { error: err.response?.data?.error || err.message };
+  }
+}
+
+export async function resetPassword(email, token, password) {
+  try {
+    const res = await api.post('/auth/reset-password', { email, token, password });
+    if (res.data.token) {
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+    }
+    return res.data;
+  } catch (err) {
+    console.error('Reset password error:', err);
     return { error: err.response?.data?.error || err.message };
   }
 }

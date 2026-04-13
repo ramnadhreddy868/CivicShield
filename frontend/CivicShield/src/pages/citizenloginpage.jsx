@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { registerUser, loginUser, verifyOtp, resendOtp } from "../api";
+import { registerUser, loginUser, verifyOtp, resendOtp, forgotPassword, resetPassword } from "../api";
 
 export default function CitizenLoginPage() {
   const navigate = useNavigate();
@@ -33,13 +33,18 @@ export default function CitizenLoginPage() {
   const handleRegister = async (e) => {
     e.preventDefault();
     setError("");
+    setMsg("");
     setLoading(true);
     try {
       const res = await registerUser(formData);
-      if (res.otpSent) {
+      if (res.error) {
+        setError(res.error);
+      } else if (res.otpSent) {
         setMsg("Registration successful! OTP sent to your email.");
         setStep("otp");
         setResendTimer(30);
+      } else {
+        setError("Registration failed. Please try again.");
       }
     } catch (err) {
       setError(err.response?.data?.error || "Registration failed");
@@ -75,15 +80,64 @@ export default function CitizenLoginPage() {
     }
   };
 
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setError("");
+    setMsg("");
+    setLoading(true);
+    try {
+      const res = await forgotPassword(formData.email);
+      if (res.error) {
+        setError(res.error);
+      } else {
+        setMsg("Password reset code sent to your email.");
+        setStep("reset");
+        setFormData((prev) => ({ ...prev, otp: "", password: "" }));
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to send reset code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setError("");
+    setMsg("");
+    setLoading(true);
+    try {
+      const res = await resetPassword(formData.email, formData.otp, formData.password);
+      if (res.error) {
+        setError(res.error);
+      } else if (res.token) {
+        window.showToast("✅ Password reset successfully! Welcome back.", "success");
+        navigate("/dashboard");
+      } else {
+        setError("Password reset failed. Please try again.");
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to reset password");
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await verifyOtp(formData.email, formData.otp);
-      window.showToast("✅ Verification successful! Welcome to CivicShield.", "success");
-      navigate("/dashboard");
+      const res = await verifyOtp(formData.email, formData.otp);
+      if (res.error) {
+        const errorMessage = res.error || "Invalid OTP. Please try again.";
+        window.showToast(errorMessage, "error");
+        setError(errorMessage);
+      } else {
+        window.showToast("✅ Verification successful! Welcome to CivicShield.", "success");
+        navigate("/dashboard");
+      }
     } catch (err) {
       const errorMessage = err.response?.data?.error || "Invalid OTP. Please try again.";
       window.showToast(errorMessage, "error");
@@ -139,7 +193,80 @@ export default function CitizenLoginPage() {
             {loading ? "Signing in..." : "Login"}
           </button>
           <div className="auth-footer">
+            <p><span onClick={() => setStep("forgot")} className="auth-link">Forgot password?</span></p>
             <p>Don't have an account? <span onClick={() => setStep("register")} className="auth-link">Sign up</span></p>
+          </div>
+        </form>
+      );
+    }
+
+    if (step === "forgot") {
+      return (
+        <form onSubmit={handleForgotPassword} className="auth-form">
+          <div className="form-group">
+            <label>Email Address</label>
+            <input 
+              type="email" 
+              name="email" 
+              className="form-input"
+              required 
+              onChange={handleChange} 
+              placeholder="name@example.com" 
+            />
+          </div>
+          <button type="submit" className="btn-primary" disabled={loading}>
+            {loading ? "Sending..." : "Send reset code"}
+          </button>
+          <div className="auth-footer">
+            <p>Remembered your password? <span onClick={() => setStep("login")} className="auth-link">Back to login</span></p>
+          </div>
+        </form>
+      );
+    }
+
+    if (step === "reset") {
+      return (
+        <form onSubmit={handleResetPassword} className="auth-form">
+          <div className="form-group">
+            <label>Email Address</label>
+            <input 
+              type="email" 
+              name="email" 
+              className="form-input"
+              required 
+              value={formData.email}
+              onChange={handleChange} 
+              placeholder="name@example.com" 
+            />
+          </div>
+          <div className="form-group">
+            <label>Reset Code</label>
+            <input
+              type="text"
+              name="otp"
+              className="form-input"
+              required
+              maxLength="6"
+              onChange={handleChange}
+              placeholder="000000"
+            />
+          </div>
+          <div className="form-group">
+            <label>New Password</label>
+            <input 
+              type="password" 
+              name="password" 
+              className="form-input"
+              required 
+              onChange={handleChange} 
+              placeholder="••••••••" 
+            />
+          </div>
+          <button type="submit" className="btn-primary" disabled={loading}>
+            {loading ? "Resetting..." : "Reset password"}
+          </button>
+          <div className="auth-footer">
+            <p>Back to <span onClick={() => setStep("login")} className="auth-link">Login</span></p>
           </div>
         </form>
       );
@@ -205,6 +332,19 @@ export default function CitizenLoginPage() {
     if (step === "otp") {
       return (
         <form onSubmit={handleVerifyOtp} className="auth-form">
+          <div className="form-group">
+            <label>Email Address</label>
+            <input 
+              type="email" 
+              name="email" 
+              className="form-input"
+              required 
+              value={formData.email}
+              onChange={handleChange} 
+              placeholder="name@example.com" 
+              readOnly
+            />
+          </div>
           <div className="form-group">
             <label>6-Digit Verification Code</label>
             <input

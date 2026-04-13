@@ -19,6 +19,10 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+transporter.verify()
+  .then(() => console.log('✅ Email transporter verified successfully'))
+  .catch((err) => console.error('✗ Email transporter verification failed:', err));
+
 // Helper to send OTP via email
 const sendOTPEmail = async (email, otp) => {
   const mailOptions = {
@@ -55,6 +59,37 @@ CivicShield Support Team`,
     console.error('Email send error:', err);
     // Log OTP anyway as fallback for development if email fails
     console.log(`Fallback 📧 OTP for ${email}: ${otp}`);
+  }
+};
+
+// Helper to send password reset email
+const sendPasswordResetEmail = async (email, token) => {
+  const mailOptions = {
+    from: `"CivicShield Support" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: 'CivicShield Password Reset Code',
+    text: `Hello,\n\nYour CivicShield password reset code is: ${token}\n\nThis code will expire in 15 minutes.\n\nIf you did not request this, please ignore this email.\n\nCivicShield Support Team`,
+    html: `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; background-color: #f9f9f9; border-radius: 10px; max-width: 500px; margin: 0 auto;">
+            <h2 style="color: #4CAF50; text-align: center;">CivicShield Password Reset</h2>
+            <p style="font-size: 16px;">Hello,</p>
+            <p style="font-size: 16px;">Your password reset code is:</p>
+            <div style="background-color: #fff; padding: 20px; border-radius: 5px; text-align: center; border: 1px solid #ddd; margin: 20px 0;">
+              <h1 style="color: #333; letter-spacing: 10px; margin: 0; font-size: 40px;">${token}</h1>
+            </div>
+            <p style="color: #666; font-size: 14px;">This code will expire in <b>15 minutes</b>.</p>
+            <p style="color: #f44336; font-size: 14px;">If you did not request this, please ignore this email.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+            <p style="color: #999; font-size: 12px; text-align: center;">CivicShield Support Team</p>
+           </div>`,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Password reset code sent to ${email}`);
+  } catch (err) {
+    console.error('Password reset email error:', err);
+    console.log(`Fallback 📧 Password reset code for ${email}: ${token}`);
+    throw err;
   }
 };
 
@@ -142,6 +177,72 @@ router.post('/resend-otp', async (req, res) => {
   }
 });
 
+// Forgot password route
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
+    user.reset_password_token = token;
+    user.reset_password_expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    await user.save();
+
+    try {
+      await sendPasswordResetEmail(email, token);
+      res.json({ success: true, message: 'Password reset code sent to your email.' });
+    } catch (err) {
+      console.error('Forgot password email send failed:', err);
+      res.status(500).json({ error: 'Failed to send password reset code' });
+    }
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Failed to send password reset code' });
+  }
+});
+
+// Reset password route
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, token, password } = req.body;
+    if (!email || !token || !password) {
+      return res.status(400).json({ error: 'Email, token, and new password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+reset_password_token +reset_password_expiry');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!user.reset_password_token || user.reset_password_token !== token) {
+      return res.status(400).json({ error: 'Invalid reset code' });
+    }
+    if (new Date() > user.reset_password_expiry) {
+      return res.status(400).json({ error: 'Reset code has expired' });
+    }
+
+    user.password = password;
+    user.reset_password_token = undefined;
+    user.reset_password_expiry = undefined;
+    await user.save();
+
+    const authToken = generateToken(user);
+    res.json({ success: true, message: 'Password reset successfully', token: authToken, user: user.toJSON() });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
 // Register route
 router.post('/register', async (req, res) => {
   try {
@@ -173,13 +274,16 @@ router.post('/register', async (req, res) => {
       email_verified: false,
     });
 
-    // Generate and send OTP
+    // Generate and send OTP (non-blocking for better performance)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.otp_code = otp;
     user.otp_expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
     await user.save();
 
-    await sendOTPEmail(email, otp);
+    // Send email asynchronously (don't wait for it)
+    sendOTPEmail(email, otp).catch(err => {
+      console.error('Failed to send OTP email:', err);
+    });
 
     res.status(201).json({
       success: true,

@@ -1,10 +1,11 @@
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const multer = require('multer');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 
@@ -72,17 +73,38 @@ app.use((req, res) => {
 });
 
 // Mongo connection
-const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/civik_shield';
-mongoose
-  .connect(mongoUri, { 
+const configuredMongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+const defaultMongoUri = 'mongodb://127.0.0.1:27017/civik_shield';
+
+const connectToMongo = async (uri) => {
+  return mongoose.connect(uri, {
     autoIndex: true,
-    serverSelectionTimeoutMS: 5000
-  })
-  .then(() => console.log('✓ MongoDB connected successfully'))
-  .catch((err) => {
-    console.error('✗ MongoDB connection error:', err.message);
-    console.error('Make sure MongoDB is running on:', mongoUri);
+    serverSelectionTimeoutMS: 5000,
   });
+};
+
+(async () => {
+  const primaryUri = configuredMongoUri || defaultMongoUri;
+
+  try {
+    await connectToMongo(primaryUri);
+    console.log('✓ MongoDB connected successfully');
+  } catch (err) {
+    console.error('✗ MongoDB connection error:', err.message);
+    if (configuredMongoUri && configuredMongoUri !== defaultMongoUri) {
+      console.warn('⚠️ Falling back to local MongoDB URI:', defaultMongoUri);
+      try {
+        await connectToMongo(defaultMongoUri);
+        console.log('✓ MongoDB connected successfully using local fallback');
+      } catch (fallbackErr) {
+        console.error('✗ Local MongoDB fallback failed:', fallbackErr.message);
+        console.error('Make sure MongoDB is running locally or fix your MONGODB_URI.');
+      }
+    } else {
+      console.error('Make sure MongoDB is running on:', defaultMongoUri);
+    }
+  }
+})();
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

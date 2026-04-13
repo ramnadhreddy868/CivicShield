@@ -9,7 +9,7 @@ const UserSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       lowercase: true,
-      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email'],
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please enter a valid email'],
     },
     password: {
       type: String,
@@ -44,6 +44,14 @@ const UserSchema = new mongoose.Schema(
       default: 0,
       select: false,
     },
+    reset_password_token: {
+      type: String,
+      select: false,
+    },
+    reset_password_expiry: {
+      type: Date,
+      select: false,
+    },
     email_verified: {
       type: Boolean,
       default: false,
@@ -61,7 +69,7 @@ UserSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   
   try {
-    const salt = await bcrypt.genSalt(10);
+    const salt = await bcrypt.genSalt(8); // Reduced from 10 to 8 for better performance
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (err) {
