@@ -12,7 +12,10 @@ const JWT_EXPIRE = '7d';
 
 // Transporter for Gmail SMTP
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
+  requireTLS: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -315,7 +318,6 @@ router.post('/login', async (req, res) => {
     }
 
     // Check if user is disabled (only if they were already verified)
-    // If they are not verified, we still want to check password so they can get a new OTP.
     if (!user.isActive && user.email_verified) {
       return res.status(403).json({ error: 'Account is disabled. Please contact support.' });
     }
@@ -329,7 +331,6 @@ router.post('/login', async (req, res) => {
     const isPasswordValid = await user.matchPassword(password);
     console.log(`🔐 Password valid for ${email}: ${isPasswordValid}`);
     if (!isPasswordValid) {
-      // Small security risk but helpful for debugging: check if hashed password exists
       const hasHash = !!user.password;
       console.log(`⚠️ Password mismatch for ${email}. User has hash: ${hasHash}`);
       return res.status(401).json({ error: 'Invalid email or password' });
