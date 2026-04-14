@@ -1,6 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const User = require('../models/User');
 const userRepo = require('../repositories/userRepo');
 const { protect } = require('../middleware/auth');
@@ -10,84 +10,56 @@ const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 const JWT_EXPIRE = '7d';
 
-// Transporter for Gmail SMTP
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  requireTLS: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
-transporter.verify()
-  .then(() => console.log('✅ Email transporter verified successfully'))
-  .catch((err) => console.error('✗ Email transporter verification failed:', err));
+// Resend email client
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Helper to send OTP via email
 const sendOTPEmail = async (email, otp) => {
-  const mailOptions = {
-    from: `"CivicShield Support" <${process.env.EMAIL_USER}>`,
-    to: email,
-    subject: 'CivicShield Account Verification OTP',
-    text: `Hello,
-
-Your OTP for CivicShield account verification is: ${otp}
-
-This OTP will expire in 5 minutes.
-
-Do not share this code with anyone.
-
-CivicShield Support Team`,
-    html: `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; background-color: #f9f9f9; border-radius: 10px; max-width: 500px; margin: 0 auto;">
-            <h2 style="color: #4CAF50; text-align: center;">CivicShield Security</h2>
-            <p style="font-size: 16px;">Hello,</p>
-            <p style="font-size: 16px;">Your OTP for CivicShield account verification is:</p>
-            <div style="background-color: #fff; padding: 20px; border-radius: 5px; text-align: center; border: 1px solid #ddd; margin: 20px 0;">
-              <h1 style="color: #333; letter-spacing: 10px; margin: 0; font-size: 40px;">${otp}</h1>
-            </div>
-            <p style="color: #666; font-size: 14px;">This OTP will expire in <b>5 minutes</b>.</p>
-            <p style="color: #f44336; font-size: 14px;">Do not share this code with anyone.</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-            <p style="color: #999; font-size: 12px; text-align: center;">CivicShield Support Team</p>
-           </div>`,
-  };
-
   try {
-    await transporter.sendMail(mailOptions);
+    await resend.emails.send({
+      from: 'CivicShield Support <onboarding@resend.dev>',
+      to: email,
+      subject: 'CivicShield Account Verification OTP',
+      html: `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; background-color: #f9f9f9; border-radius: 10px; max-width: 500px; margin: 0 auto;">
+              <h2 style="color: #4CAF50; text-align: center;">CivicShield Security</h2>
+              <p style="font-size: 16px;">Hello,</p>
+              <p style="font-size: 16px;">Your OTP for CivicShield account verification is:</p>
+              <div style="background-color: #fff; padding: 20px; border-radius: 5px; text-align: center; border: 1px solid #ddd; margin: 20px 0;">
+                <h1 style="color: #333; letter-spacing: 10px; margin: 0; font-size: 40px;">${otp}</h1>
+              </div>
+              <p style="color: #666; font-size: 14px;">This OTP will expire in <b>5 minutes</b>.</p>
+              <p style="color: #f44336; font-size: 14px;">Do not share this code with anyone.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+              <p style="color: #999; font-size: 12px; text-align: center;">CivicShield Support Team</p>
+             </div>`,
+    });
     console.log(`✅ OTP sent to ${email}`);
   } catch (err) {
     console.error('Email send error:', err);
-    // Log OTP anyway as fallback for development if email fails
     console.log(`Fallback 📧 OTP for ${email}: ${otp}`);
   }
 };
 
 // Helper to send password reset email
 const sendPasswordResetEmail = async (email, token) => {
-  const mailOptions = {
-    from: `"CivicShield Support" <${process.env.EMAIL_USER}>`,
-    to: email,
-    subject: 'CivicShield Password Reset Code',
-    text: `Hello,\n\nYour CivicShield password reset code is: ${token}\n\nThis code will expire in 15 minutes.\n\nIf you did not request this, please ignore this email.\n\nCivicShield Support Team`,
-    html: `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; background-color: #f9f9f9; border-radius: 10px; max-width: 500px; margin: 0 auto;">
-            <h2 style="color: #4CAF50; text-align: center;">CivicShield Password Reset</h2>
-            <p style="font-size: 16px;">Hello,</p>
-            <p style="font-size: 16px;">Your password reset code is:</p>
-            <div style="background-color: #fff; padding: 20px; border-radius: 5px; text-align: center; border: 1px solid #ddd; margin: 20px 0;">
-              <h1 style="color: #333; letter-spacing: 10px; margin: 0; font-size: 40px;">${token}</h1>
-            </div>
-            <p style="color: #666; font-size: 14px;">This code will expire in <b>15 minutes</b>.</p>
-            <p style="color: #f44336; font-size: 14px;">If you did not request this, please ignore this email.</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-            <p style="color: #999; font-size: 12px; text-align: center;">CivicShield Support Team</p>
-           </div>`,
-  };
-
   try {
-    await transporter.sendMail(mailOptions);
+    await resend.emails.send({
+      from: 'CivicShield Support <onboarding@resend.dev>',
+      to: email,
+      subject: 'CivicShield Password Reset Code',
+      html: `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; background-color: #f9f9f9; border-radius: 10px; max-width: 500px; margin: 0 auto;">
+              <h2 style="color: #4CAF50; text-align: center;">CivicShield Password Reset</h2>
+              <p style="font-size: 16px;">Hello,</p>
+              <p style="font-size: 16px;">Your password reset code is:</p>
+              <div style="background-color: #fff; padding: 20px; border-radius: 5px; text-align: center; border: 1px solid #ddd; margin: 20px 0;">
+                <h1 style="color: #333; letter-spacing: 10px; margin: 0; font-size: 40px;">${token}</h1>
+              </div>
+              <p style="color: #666; font-size: 14px;">This code will expire in <b>15 minutes</b>.</p>
+              <p style="color: #f44336; font-size: 14px;">If you did not request this, please ignore this email.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+              <p style="color: #999; font-size: 12px; text-align: center;">CivicShield Support Team</p>
+             </div>`,
+    });
     console.log(`✅ Password reset code sent to ${email}`);
   } catch (err) {
     console.error('Password reset email error:', err);
@@ -105,37 +77,30 @@ const generateToken = (user) => {
   );
 };
 
-// DEPRECATED: Standard login/register routes handle OTP now
-
 // Verify OTP Route
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
     if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
 
-    // Find user and explicitly select otp fields
     const user = await User.findOne({ email: email.toLowerCase() }).select('+otp_code +otp_expiry +otp_attempts');
     
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Check expiry
     if (new Date() > user.otp_expiry) {
       return res.status(400).json({ error: 'OTP has expired. Please request a new one.' });
     }
 
-    // Check attempts
     if (user.otp_attempts >= 3) {
       return res.status(400).json({ error: 'Maximum verification attempts exceeded. Please request a new OTP.' });
     }
 
-    // Verify OTP
     if (user.otp_code !== otp) {
       user.otp_attempts += 1;
       await user.save();
       return res.status(400).json({ error: 'Invalid OTP. Please try again.' });
     }
 
-    // Success! Clear OTP fields and activate account
     user.otp_code = undefined;
     user.otp_expiry = undefined;
     user.otp_attempts = 0;
@@ -168,7 +133,7 @@ router.post('/resend-otp', async (req, res) => {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.otp_code = otp;
-    user.otp_expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    user.otp_expiry = new Date(Date.now() + 5 * 60 * 1000);
     user.otp_attempts = 0;
     await user.save();
 
@@ -193,7 +158,7 @@ router.post('/forgot-password', async (req, res) => {
 
     const token = Math.floor(100000 + Math.random() * 900000).toString();
     user.reset_password_token = token;
-    user.reset_password_expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    user.reset_password_expiry = new Date(Date.now() + 15 * 60 * 1000);
     await user.save();
 
     try {
@@ -251,7 +216,6 @@ router.post('/register', async (req, res) => {
   try {
     const { email, password, name, role = 'citizen', phone } = req.body;
 
-    // Validation
     if (!email || !password || !name) {
       return res.status(400).json({ error: 'Email, password, and name are required' });
     }
@@ -260,30 +224,26 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
-    // Check if user already exists
     const existingUser = await userRepo.findByEmail(email);
     if (existingUser) {
       return res.status(409).json({ error: 'Email already registered' });
     }
 
-    // Create new user (inactive until email verified)
     const user = await userRepo.create({
       email: email.toLowerCase(),
       password,
       name,
       role,
       phone,
-      isActive: false, // Wait for OTP
+      isActive: false,
       email_verified: false,
     });
 
-    // Generate and send OTP (non-blocking for better performance)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.otp_code = otp;
-    user.otp_expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    user.otp_expiry = new Date(Date.now() + 5 * 60 * 1000);
     await user.save();
 
-    // Send email asynchronously (don't wait for it)
     sendOTPEmail(email, otp).catch(err => {
       console.error('Failed to send OTP email:', err);
     });
@@ -305,29 +265,24 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password, role = 'citizen' } = req.body;
 
-    // Validation
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Find user by email
     const user = await userRepo.findByEmail(email);
     console.log(`🔍 Login attempt for: ${email}, Found user: ${!!user}`);
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Check if user is disabled (only if they were already verified)
     if (!user.isActive && user.email_verified) {
       return res.status(403).json({ error: 'Account is disabled. Please contact support.' });
     }
 
-    // For admin login, check the role
     if (role === 'admin' && user.role !== 'admin') {
       return res.status(403).json({ error: 'This account does not have admin privileges' });
     }
 
-    // Check password
     const isPasswordValid = await user.matchPassword(password);
     console.log(`🔐 Password valid for ${email}: ${isPasswordValid}`);
     if (!isPasswordValid) {
@@ -336,10 +291,8 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Generate and return token directly for all roles including citizen
     const token = generateToken(user);
 
-    // Mark user as active/verified if they are logging in successfully
     if (!user.isActive) {
       user.isActive = true;
       user.email_verified = true;
@@ -395,7 +348,7 @@ router.patch('/me', protect, async (req, res) => {
   }
 });
 
-// Logout route (frontend just deletes token)
+// Logout route
 router.post('/logout', protect, (req, res) => {
   res.json({ success: true, message: 'Logged out successfully' });
 });
