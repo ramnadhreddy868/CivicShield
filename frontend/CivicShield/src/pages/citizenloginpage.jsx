@@ -26,6 +26,13 @@ export default function CitizenLoginPage() {
     return () => clearInterval(timer);
   }, [resendTimer]);
 
+  // Reset OTP field when entering OTP step
+  useEffect(() => {
+    if (step === "otp" || step === "reset") {
+      setFormData((prev) => ({ ...prev, otp: "" }));
+    }
+  }, [step]);
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -62,11 +69,9 @@ export default function CitizenLoginPage() {
       if (res.error) {
         setError(res.error);
       } else if (res.token) {
-        // Direct login — token received, go straight to dashboard
         window.showToast("✅ Welcome back to CivicShield!", "success");
         navigate("/dashboard");
       } else if (res.otpSent) {
-        // OTP fallback (if backend still uses OTP for some accounts)
         setMsg("OTP sent to your email.");
         setStep("otp");
         setResendTimer(30);
@@ -123,7 +128,6 @@ export default function CitizenLoginPage() {
     }
   };
 
-
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     setError("");
@@ -166,7 +170,7 @@ export default function CitizenLoginPage() {
   const renderForm = () => {
     if (step === "login") {
       return (
-        <form onSubmit={handleLogin} className="auth-form">
+        <form onSubmit={handleLogin} className="auth-form" autoComplete="off">
           <div className="form-group">
             <label>Email Address</label>
             <input 
@@ -175,7 +179,8 @@ export default function CitizenLoginPage() {
               className="form-input"
               required 
               onChange={handleChange} 
-              placeholder="name@example.com" 
+              placeholder="name@example.com"
+              autoComplete="email"
             />
           </div>
           <div className="form-group">
@@ -186,7 +191,8 @@ export default function CitizenLoginPage() {
               className="form-input"
               required 
               onChange={handleChange} 
-              placeholder="••••••••" 
+              placeholder="••••••••"
+              autoComplete="current-password"
             />
           </div>
           <button type="submit" className="btn-primary" disabled={loading}>
@@ -202,7 +208,7 @@ export default function CitizenLoginPage() {
 
     if (step === "forgot") {
       return (
-        <form onSubmit={handleForgotPassword} className="auth-form">
+        <form onSubmit={handleForgotPassword} className="auth-form" autoComplete="off">
           <div className="form-group">
             <label>Email Address</label>
             <input 
@@ -211,7 +217,8 @@ export default function CitizenLoginPage() {
               className="form-input"
               required 
               onChange={handleChange} 
-              placeholder="name@example.com" 
+              placeholder="name@example.com"
+              autoComplete="email"
             />
           </div>
           <button type="submit" className="btn-primary" disabled={loading}>
@@ -226,7 +233,7 @@ export default function CitizenLoginPage() {
 
     if (step === "reset") {
       return (
-        <form onSubmit={handleResetPassword} className="auth-form">
+        <form onSubmit={handleResetPassword} className="auth-form" autoComplete="off">
           <div className="form-group">
             <label>Email Address</label>
             <input 
@@ -236,7 +243,8 @@ export default function CitizenLoginPage() {
               required 
               value={formData.email}
               onChange={handleChange} 
-              placeholder="name@example.com" 
+              placeholder="name@example.com"
+              readOnly
             />
           </div>
           <div className="form-group">
@@ -244,11 +252,14 @@ export default function CitizenLoginPage() {
             <input
               type="text"
               name="otp"
-              className="form-input"
+              className="form-input otp-large-input"
               required
               maxLength="6"
+              value={formData.otp}
               onChange={handleChange}
               placeholder="000000"
+              autoComplete="one-time-code"
+              inputMode="numeric"
             />
           </div>
           <div className="form-group">
@@ -259,7 +270,8 @@ export default function CitizenLoginPage() {
               className="form-input"
               required 
               onChange={handleChange} 
-              placeholder="••••••••" 
+              placeholder="••••••••"
+              autoComplete="new-password"
             />
           </div>
           <button type="submit" className="btn-primary" disabled={loading}>
@@ -274,7 +286,7 @@ export default function CitizenLoginPage() {
 
     if (step === "register") {
       return (
-        <form onSubmit={handleRegister} className="auth-form">
+        <form onSubmit={handleRegister} className="auth-form" autoComplete="off">
           <div className="form-group">
             <label>Full Name</label>
             <input 
@@ -283,7 +295,8 @@ export default function CitizenLoginPage() {
               className="form-input"
               required 
               onChange={handleChange} 
-              placeholder="John Doe" 
+              placeholder="John Doe"
+              autoComplete="name"
             />
           </div>
           <div className="form-group">
@@ -294,7 +307,8 @@ export default function CitizenLoginPage() {
               className="form-input"
               required 
               onChange={handleChange} 
-              placeholder="john@example.com" 
+              placeholder="john@example.com"
+              autoComplete="email"
             />
           </div>
           <div className="form-group">
@@ -305,7 +319,8 @@ export default function CitizenLoginPage() {
               className="form-input"
               required 
               onChange={handleChange} 
-              placeholder="••••••••" 
+              placeholder="••••••••"
+              autoComplete="new-password"
             />
           </div>
           <div className="form-group">
@@ -316,7 +331,8 @@ export default function CitizenLoginPage() {
               className="form-input"
               required 
               onChange={handleChange} 
-              placeholder="123-456-7890" 
+              placeholder="123-456-7890"
+              autoComplete="tel"
             />
           </div>
           <button type="submit" className="btn-primary" disabled={loading}>
@@ -331,7 +347,7 @@ export default function CitizenLoginPage() {
 
     if (step === "otp") {
       return (
-        <form onSubmit={handleVerifyOtp} className="auth-form">
+        <form onSubmit={handleVerifyOtp} className="auth-form" autoComplete="off">
           <div className="form-group">
             <label>Email Address</label>
             <input 
@@ -353,8 +369,11 @@ export default function CitizenLoginPage() {
               className="form-input otp-large-input"
               required
               maxLength="6"
+              value={formData.otp}
               onChange={handleChange}
               placeholder="0 0 0 0 0 0"
+              autoComplete="one-time-code"
+              inputMode="numeric"
             />
           </div>
           <button type="submit" className="btn-primary" disabled={loading}>
