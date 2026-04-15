@@ -1,6 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const userRepo = require('../repositories/userRepo');
 const { protect } = require('../middleware/auth');
@@ -10,14 +10,20 @@ const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 const JWT_EXPIRE = '7d';
 
-// Resend email client
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Gmail SMTP transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 // Helper to send OTP via email
 const sendOTPEmail = async (email, otp) => {
   try {
-    await resend.emails.send({
-      from: 'CivicShield Support <onboarding@resend.dev>',
+    await transporter.sendMail({
+      from: `"CivicShield Support" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: 'CivicShield Account Verification OTP',
       html: `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; background-color: #f9f9f9; border-radius: 10px; max-width: 500px; margin: 0 auto;">
@@ -43,8 +49,8 @@ const sendOTPEmail = async (email, otp) => {
 // Helper to send password reset email
 const sendPasswordResetEmail = async (email, token) => {
   try {
-    await resend.emails.send({
-      from: 'CivicShield Support <onboarding@resend.dev>',
+    await transporter.sendMail({
+      from: `"CivicShield Support" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: 'CivicShield Password Reset Code',
       html: `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; background-color: #f9f9f9; border-radius: 10px; max-width: 500px; margin: 0 auto;">
@@ -84,7 +90,7 @@ router.post('/verify-otp', async (req, res) => {
     if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
 
     const user = await User.findOne({ email: email.toLowerCase() }).select('+otp_code +otp_expiry +otp_attempts');
-    
+
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     if (new Date() > user.otp_expiry) {
